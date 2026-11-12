@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arc-timeline-to-reitti"
-version = "1.0.0"
+dynamic = ["version"]
 description = "Convert Arc Timeline 4 weekly exports into Reitti-compatible GeoJSON"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -30,6 +30,9 @@ dependencies = []
 
 [project.scripts]
 arc-to-reitti = "arc_to_reitti.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "arc_to_reitti.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
