@@ -14,6 +14,10 @@ from typing import Callable
 class ReittiImportError(Exception):
     """Reitti rejected an upload or could not be reached."""
 
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status
+
 
 def _safe_filename(name: str) -> str:
     return name.replace('"', "_").replace("\r", "_").replace("\n", "_")
@@ -71,7 +75,9 @@ def post_file(
             payload = response.read()
     except urllib.error.HTTPError as exc:
         detail = exc.read(500).decode("utf-8", "replace").strip()
-        raise ReittiImportError(f"{file_path.name}: HTTP {exc.code}: {detail}") from exc
+        raise ReittiImportError(
+            f"{file_path.name}: HTTP {exc.code}: {detail}", status=exc.code
+        ) from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise ReittiImportError(f"{file_path.name}: {exc}") from exc
 
@@ -164,7 +170,8 @@ def import_directory(
                 result = post_file(base_url, token, device, path, timeout=timeout)
                 break
             except ReittiImportError as exc:
-                if attempt >= retries:
+                retryable = exc.status is None or exc.status == 429 or exc.status >= 500
+                if attempt >= retries or not retryable:
                     _append_log(log_path, path.name, {"success": False, "error": str(exc)})
                     raise
                 time.sleep(2**attempt)

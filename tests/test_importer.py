@@ -108,6 +108,15 @@ class ImporterTests(unittest.TestCase):
         self.assertIn('"success":false', log)
         self.assertIn("HTTP 401", log)
 
+    def test_does_not_retry_an_authentication_failure(self):
+        write_geojson(self.folder, "2026-W40.geojson", [{"type": "Feature"}])
+        with reitti_server(statuses=[401]) as (url, calls):
+            with mock.patch("arc_to_reitti.importer.time.sleep") as sleep:
+                with self.assertRaises(ReittiImportError):
+                    import_directory(self.folder, url, "bad-token", log_path=self.log, retries=3)
+        self.assertEqual(len(calls), 1)
+        sleep.assert_not_called()
+
     def test_retries_a_transient_failure(self):
         write_geojson(self.folder, "2026-W40.geojson", [{"type": "Feature"}])
         with reitti_server(statuses=[500, 200]) as (url, calls):

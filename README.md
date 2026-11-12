@@ -107,7 +107,7 @@ Exit codes: `0` success, `1` conversion error.
 | `--token TOKEN` | no | Reitti API token. Prefer the `REITTI_API_TOKEN` environment variable so the token is not in your shell history or process list. |
 | `--device ID` | no | Reitti device id. Default: `1`. |
 | `--log PATH` | no | Import log. Default: `DIR/import.log`. |
-| `--retries N` | no | Retries per file after a failed request. Default: `3`, with 1 s, 2 s and 4 s waits. |
+| `--retries N` | no | Retries per file after a network error, `429` or `5xx` response. Default: `3`, with 1 s, 2 s and 4 s waits. Authentication and other `4xx` errors stop immediately. |
 | `--timeout SECONDS` | no | HTTP timeout per upload. Default: `120`. |
 | `--quiet` | no | Only print the final summary. |
 
