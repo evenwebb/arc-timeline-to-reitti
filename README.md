@@ -56,7 +56,7 @@ If the same week appears in more than one container, the samples are combined an
 
 ## Install
 
-From the private repository with `pipx`:
+From GitHub with `pipx`:
 
 ```sh
 pipx install "git+https://github.com/evenwebb/arc-timeline-to-reitti.git"
