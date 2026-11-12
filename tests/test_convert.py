@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gzip
+import io
 import json
 import tempfile
 import unittest
@@ -8,6 +9,7 @@ import zipfile
 from pathlib import Path
 
 from arc_to_reitti.convert import (
+    MAX_NESTED_ZIP_DEPTH,
     ConversionError,
     EmptyArchiveError,
     MissingWeeksError,
@@ -22,14 +24,32 @@ def sample(**values):
     return base
 
 
-def write_archive(folder: Path, weeks: dict[str, dict], prefix: str = "") -> Path:
-    path = folder / "export.zip"
-    with zipfile.ZipFile(path, "w") as archive:
+def zip_bytes(weeks: dict[str, dict], prefix: str = "") -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
         for period, data in weeks.items():
             archive.writestr(
                 f"{prefix}{period}.json.gz",
                 gzip.compress(json.dumps(data).encode("utf-8")),
             )
+    return buffer.getvalue()
+
+
+def write_archive(
+    folder: Path, weeks: dict[str, dict], prefix: str = "", name: str = "export.zip"
+) -> Path:
+    path = folder / name
+    path.write_bytes(zip_bytes(weeks, prefix))
+    return path
+
+
+def write_week_file(
+    folder: Path, period: str, data: dict, compressed: bool = True
+) -> Path:
+    suffix = ".json.gz" if compressed else ".json"
+    payload = json.dumps(data).encode("utf-8")
+    path = folder / f"{period}{suffix}"
+    path.write_bytes(gzip.compress(payload) if compressed else payload)
     return path
 
 
@@ -160,14 +180,97 @@ class ConvertArchiveTests(unittest.TestCase):
         with self.assertRaises(ConversionError):
             convert_archive(path, self.out)
 
-    def test_duplicate_week_is_reported(self):
+    def test_duplicate_week_is_combined(self):
         path = self.root / "duplicate.zip"
         with zipfile.ZipFile(path, "w") as archive:
             for prefix in ("a/", "b/"):
                 archive.writestr(
                     f"{prefix}2026-W40.json.gz",
-                    gzip.compress(json.dumps({"samples": []}).encode("utf-8")),
+                    gzip.compress(
+                        json.dumps({"samples": [sample(horizontalAccuracy=20)]}).encode("utf-8")
+                    ),
                 )
+        result = convert_archive(path, self.out)
+        week = result["manifest"]["weeks"][0]
+        self.assertEqual(week["samples"], 2)
+        self.assertEqual(week["points"], 1)
+        self.assertEqual(week["duplicate_timestamps"], 1)
+        self.assertEqual(len(week["sources"]), 2)
+
+    def test_single_weekly_file(self):
+        path = write_week_file(self.root, "2026-W40", {"samples": [sample()]})
+        result = convert_archive(path, self.out)
+        self.assertEqual(result["manifest"]["totals"]["weeks"], 1)
+        self.assertEqual(result["manifest"]["totals"]["points"], 1)
+
+    def test_directory_of_weekly_files(self):
+        folder = self.root / "weeklies"
+        folder.mkdir()
+        write_week_file(folder, "2026-W40", {"samples": [sample()]})
+        write_week_file(folder, "2026-W41", {"samples": [sample()]}, compressed=False)
+        result = convert_archive(folder, self.out)
+        self.assertEqual(result["manifest"]["totals"]["weeks"], 2)
+        self.assertTrue((self.out / "2026-W41.geojson").exists())
+
+    def test_directory_of_zip_archives(self):
+        folder = self.root / "zips"
+        folder.mkdir()
+        write_archive(folder, {"2026-W40": {"samples": [sample()]}}, name="one.zip")
+        write_archive(folder, {"2026-W41": {"samples": [sample()]}}, name="two.zip")
+        result = convert_archive(folder, self.out)
+        self.assertEqual(result["manifest"]["totals"]["weeks"], 2)
+
+    def test_zip_of_zip_archives(self):
+        outer = self.root / "all-exports.zip"
+        with zipfile.ZipFile(outer, "w") as archive:
+            archive.writestr("export-one.zip", zip_bytes({"2026-W40": {"samples": [sample()]}}))
+            archive.writestr(
+                "nested/export-two.zip",
+                zip_bytes({"2026-W41": {"samples": [sample()]}}),
+            )
+        result = convert_archive(outer, self.out)
+        self.assertEqual(result["manifest"]["totals"]["weeks"], 2)
+
+    def test_combines_a_week_from_multiple_containers(self):
+        folder = self.root / "mixed"
+        folder.mkdir()
+        write_week_file(folder, "2026-W40", {"samples": [sample(horizontalAccuracy=20)]})
+        write_archive(
+            folder,
+            {"2026-W40": {"samples": [sample(horizontalAccuracy=10)]}},
+            name="extra.zip",
+        )
+        result = convert_archive(folder, self.out)
+        week = result["manifest"]["weeks"][0]
+        self.assertEqual(week["samples"], 2)
+        self.assertEqual(week["points"], 1)
+        self.assertEqual(week["duplicate_timestamps"], 1)
+        self.assertEqual(len(week["sources"]), 2)
+        payload = json.loads((self.out / "2026-W40.geojson").read_text())
+        self.assertEqual(payload["features"][0]["properties"]["accuracy"], 10.0)
+
+    def test_nested_zip_depth_is_limited(self):
+        payload = zip_bytes({"2026-W40": {"samples": []}})
+        for _ in range(MAX_NESTED_ZIP_DEPTH + 1):
+            buffer = io.BytesIO()
+            with zipfile.ZipFile(buffer, "w") as archive:
+                archive.writestr("nested.zip", payload)
+            payload = buffer.getvalue()
+        path = self.root / "deep.zip"
+        path.write_bytes(payload)
+        with self.assertRaises(ConversionError):
+            convert_archive(path, self.out)
+
+    def test_directory_without_weeks_is_reported(self):
+        folder = self.root / "nothing"
+        folder.mkdir()
+        (folder / "readme.txt").write_text("not an Arc export")
+        with self.assertRaises(EmptyArchiveError):
+            convert_archive(folder, self.out)
+
+    def test_non_weekly_file_is_rejected(self):
+        path = self.root / "notes.txt"
+        path.write_text("not an Arc export")
         with self.assertRaises(ConversionError):
             convert_archive(path, self.out)
 

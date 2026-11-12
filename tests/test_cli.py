@@ -48,18 +48,24 @@ class CliTests(unittest.TestCase):
         archive = write_archive(self.folder)
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
-            code = main(["convert", "--zip", str(archive), "--out", str(self.out), "--quiet"])
+            code = main(["convert", "--input", str(archive), "--out", str(self.out), "--quiet"])
         self.assertEqual(code, 0)
         self.assertIn("wrote 1 files, 1 points", stdout.getvalue())
         self.assertTrue((self.out / "manifest.json").exists())
 
-    def test_convert_command_reports_missing_archive(self):
+    def test_convert_command_accepts_the_zip_alias(self):
+        archive = write_archive(self.folder)
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = main(["convert", "--zip", str(archive), "--out", str(self.out), "--quiet"])
+        self.assertEqual(code, 0)
+
+    def test_convert_command_reports_missing_input(self):
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):
             code = main(
                 [
                     "convert",
-                    "--zip",
+                    "--input",
                     str(self.folder / "missing.zip"),
                     "--out",
                     str(self.out),
@@ -67,7 +73,7 @@ class CliTests(unittest.TestCase):
                 ]
             )
         self.assertEqual(code, 1)
-        self.assertIn("archive not found", stderr.getvalue())
+        self.assertIn("input not found", stderr.getvalue())
 
     def test_import_command_requires_a_token(self):
         stderr = io.StringIO()

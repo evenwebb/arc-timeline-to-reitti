@@ -38,7 +38,14 @@ def _add_convert_parser(subparsers: argparse._SubParsersAction) -> None:
         help="convert an Arc Timeline zip archive to GeoJSON",
         description="Convert Arc Timeline weekly JSON exports into Reitti-compatible GeoJSON.",
     )
-    parser.add_argument("--zip", required=True, type=Path, help="Arc Timeline export .zip")
+    parser.add_argument(
+        "--input",
+        "--zip",
+        dest="input",
+        required=True,
+        type=Path,
+        help="Arc export zip, weekly .json.gz/.json file, or directory containing either",
+    )
     parser.add_argument("--out", required=True, type=Path, help="directory for .geojson files")
     parser.add_argument(
         "--weeks",
@@ -77,7 +84,7 @@ def _add_import_parser(subparsers: argparse._SubParsersAction) -> None:
 def _run_convert(args: argparse.Namespace) -> int:
     try:
         result = convert_archive(
-            args.zip,
+            args.input,
             args.out,
             weeks=args.weeks,
             progress=None if args.quiet else _convert_progress,

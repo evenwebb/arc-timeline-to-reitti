@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Convert Arc Timeline 4 weekly exports into Reitti-compatible GeoJSON"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
+license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 authors = [{ name = "Steven" }]
 keywords = ["arc-timeline", "reitti", "geojson", "location-history", "gps"]

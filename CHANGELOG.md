@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-11-12
+
+### Added
+
+- Accept a single weekly `.json.gz`/`.json` file, a directory of weekly files, a directory of zip archives, a zip of zip archives, nested folders and mixed layouts.
+- Combine the same week when it appears in more than one container, deduplicating by timestamp.
+- `--input` replaces `--zip`; `--zip` remains as an alias.
+
+### Changed
+
+- Licence changed to GNU General Public License v3.0 only.
+
 ## [1.0.1] - 2026-11-12
 
 ### Fixed
